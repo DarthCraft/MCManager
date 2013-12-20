@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# Server startup script
+# Make sure this is ran when the Dedicated Server / VPS boots up.
+#
+# By: Jerom van der Sar
+##########################
+
+server start

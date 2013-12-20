@@ -1,0 +1,296 @@
+#!/bin/bash
+#
+# MCManager version 2.0
+# Minecraft bukkit server manager
+#
+# By Jerom van der Sar
+##########################
+
+
+# Load the config
+source config.cfg
+
+function infomsg() {
+  cecho "&6[INFO]&r $1"
+}
+function warningmsg() {
+  cecho "&3[WARN]&r $1"
+}
+function errormsg() {
+  cecho "&1[SEVERE]&r $1"
+}
+function okmsg() {
+  cecho "&2[FINE]&r $1"
+}
+
+ME=`whoami`
+function as_user() {
+  if [ $ME == $USERNAME ] ; then
+    bash -c "$1"
+  else
+    su - $USERNAME -c "$1"
+  fi
+}
+
+function mc_start() {
+  if [ -e "$MCPATH/restart_in_progress" ]
+  then
+    warningmsg "Server restart was aborted improperly!"
+    rm "$MCPATH/restart_in_progress"
+  fi
+  cd $MCPATH
+  infomsg "Version `java -jar $MCPATH/$SERVICE --version`"
+  as_user "cd $MCPATH && screen -h $HISTORY -dmS minecraft $INVOCATION"
+  sleep $STARTTIME
+  if pgrep -u $USERNAME -f $SERVICE > /dev/null
+  then
+    okmsg "Server is &2running&r."
+  else
+    errormsg "Could not start Minecraft server!"
+  fi
+}
+
+function mc_saveoff() {
+  if pgrep -u $USERNAME -f $SERVICE > /dev/null
+  then
+    infomsg "Server is &2running&r... Suspending saves"
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"say **SERVER IS BACKING UP**\"\015'"
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"save-off\"\015'"
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"save-all\"\015'"
+    sync
+    sleep 10
+  fi
+}
+
+function mc_saveon() {
+  if pgrep -u $USERNAME -f $SERVICE > /dev/null
+  then
+    infomsg "Server is &2running&r... Re-enabling saves"
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"save-on\"\015'"
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"say **SERVER BACKUP COMPLETE**\"\015'"
+  fi
+}
+
+function mc_stop() {
+  if pgrep -u $USERNAME -f $SERVICE > /dev/null
+  then
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"say **SERVER IS ABOUT TO SHUT DOWN**\"\015'"
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"save-all\"\015'"
+    sleep 9
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"say **SERVER IS SHUTTING DOWN**\"\015'"
+    sleep 1
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"stop\"\015'"
+    sleep $STOPTIME
+  else
+    warningmsg "Server is not running."
+    exit
+  fi
+  if pgrep -u $USERNAME -f $SERVICE > /dev/null
+  then
+    errormsg "Server could not be stopped."
+  else
+    okmsg "Server &1stopped&r."
+  fi
+}
+
+function mc_restart() {
+  mc_start()
+  mc_stop()
+}
+
+function mc_update() {
+  case "$1" in
+    dev)
+      DOWNLOAD_URL="http://dl.bukkit.org/latest-dev/craftbukkit.jar"
+    ;;
+    beta)
+      DOWNLOAD_URL="http://dl.bukkit.org/latest-beta/craftbukkit.jar"
+    ;;
+    rb)
+      DOWNLOAD_URL="http://dl.bukkit.org/latest-rb/craftbukkit.jar"
+    ;;
+    *)
+      warningmsg "Please use either 'dev', 'beta', or 'rb'"
+      exit
+    ;;
+  esac
+  ##mc_backup
+
+  infomsg "Download url: $DOWNLOAD_URL"
+  infomsg "Dowloading Update..."
+  as_user "cd $MCPATH && wget -q -O $MCPATH/craftbukkit.jar.update $DOWNLOAD_URL"
+  okmsg "Download complete!"
+
+  if [ -f $MCPATH/craftbukkit.jar.update ]
+  then
+
+    if `diff $MCPATH/$SERVICE $MCPATH/craftbukkit.jar.update >/dev/null`
+    then
+      warningmsg "The latest version of $SERVICE is already installed."
+      #rm $MCPATH/craftbukkit.jar.update
+      #exit
+    fi
+
+    running="false"
+    if pgrep -u $USERNAME -f $SERVICE > /dev/null
+    then
+      infomsg "Server is &2running&r... Stopping server for CraftBukkit update"
+      running="true"
+      mc_stop
+      if pgrep -u $USERNAME -f $SERVICE > /dev/null
+      then
+        exit
+      fi
+    fi
+
+    infomsg "Updating CraftBukkit..."
+    as_user "mv $MCPATH/craftbukkit.jar.update $MCPATH/$SERVICE"
+    
+    if [[ $running == "true" ]]
+    then
+      infomsg "Starting server..."
+      mc_start
+    fi
+
+    okmsg "Server successfully updated."
+
+  else
+    errormsg "CraftBukkit update could not be downloaded."
+  fi
+
+}
+
+function mc_backup() {
+  if [ -e "$MCPATH/restart_in_progress" ]
+  then
+    errormsg "A restart is currently running."
+    errormsg "Aborting..."
+    exit
+fi
+  mc_saveoff
+  
+  #### START BACKUP
+  NOW=`date "+%Y-%m-%d_%Hh%M"`
+  BACKUP_FILE="$BACKUPPATH/${WORLD}_${NOW}.tar"
+  infomsg "Backing up minecraft world..."
+  # as_user "cd $MCPATH && cp -r $WORLD $BACKUPPATH/${WORLD}_`date "+%Y.%m.%d_%H.%M"`"
+  as_user "tar -C \"$MCPATH/worlds/world\" -cf \"$BACKUP_FILE\" $WORLD"
+ 
+  infomsg "Backing up $SERVICE..."
+  as_user "tar -C \"$MCPATH\" -rf \"$BACKUP_FILE\" $SERVICE"
+  # as_user "cp \"$MCPATH/$SERVICE\" \"$BACKUPPATH/minecraft_server_${NOW}.jar\""
+  #### END BACKUP
+  
+  mc_saveon
+  
+  infomsg "Compressing backup..."
+  as_user "gzip -f \"$BACKUP_FILE\""
+  okmsg "Backup Complete."
+}
+
+function mc_command() {
+  command="$1";
+  if pgrep -u $USERNAME -f $SERVICE > /dev/null
+  then
+    pre_log_len=`wc -l "$MCPATH/logs/latest.log" | awk '{print $1}'`
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"$command\"\015'"
+    sleep .1 # assumes that the command will run and print to the log file in less than .1 seconds
+    # print output
+    tail -n $[`wc -l "$MCPATH/logs/latest.log" | awk '{print $1}'`-$pre_log_len] "$MCPATH/logs/latest.log"
+  fi
+}
+
+function mc_say() {
+  message="$1";
+  if pgrep -u $USERNAME -f $SERVICE > /dev/null
+  then
+    as_user "screen -p 0 -S minecraft -X eval 'stuff \"say $message\"\015'"
+    infomsg "&5[Server] $1"
+  fi
+}
+
+# Start-Stop here
+case "$1" in
+  start)
+    if  pgrep -u $USERNAME -f $SERVICE > /dev/null
+    then
+      infomsg "The server is already running!"
+    else
+      infomsg "Starting Minecraft server..."
+      mc_start
+    fi
+  ;;
+  stop)
+    if [ -e "$MCPATH/restart_in_progress" ]
+    then
+      errormsg "A restart is already running."
+      errormsg "Aborting..."
+      exit
+    fi
+    infomsg "Stopping server..."
+    mc_stop
+  ;;
+  restart)
+    mc_restart
+  ;;
+  update)
+    if [ $# -eq 2 ]; then
+      #mc_backup
+      mc_update "$2"
+    else
+      warningmsg "Must specify branch ('dev', 'beta' or 'rb')"
+    fi
+  ;;
+  backup)
+    mc_backup
+  ;;
+  status)
+    if pgrep -u $USERNAME -f $SERVICE > /dev/null
+    then
+      infomsg "Server is &2running&r."
+    else
+      infomsg "Server is &1stopped&r."
+    fi
+    infomsg "Version: `java -jar $MCPATH/$SERVICE --version`"
+  ;;
+  cmd)
+    if pgrep -u $USERNAME -f $SERVICE > /dev/null
+    then
+      if [ $# -gt 1 ]; then
+        shift
+        mc_command "$*"
+      else
+        warningmsg "Must specify server command (try 'help')"
+      fi
+    else
+      warningmsg "Server is not running!"
+    fi
+  ;;
+  say)
+    if pgrep -u $USERNAME -f $SERVICE > /dev/null
+    then
+      if [ $# -gt 1 ]; then
+        shift
+        mc_say "$*"
+      else
+        warningmsg "Must specify message"
+      fi
+    else
+      warningmsg "Server is not running!"
+    fi
+  ;;
+  *)
+    cecho "&3Usage: $0"
+    cecho "  &6start                &r- &6Starts the server"
+    cecho "  &6stop                 &r- &6Stops the server"
+    cecho "  &6update <dev/beta/rb> &r- &6Updates the server to a branch"
+    cecho "  &6backup               &r- &6Makes a backup of the world"
+    cecho "  &6status               &r- &6Shows server information"
+    cecho "  &6restart              &r- &6Restarts the server"
+    cecho "  &6say (message)        &r- &6Broadcasts a message to the server"
+    cecho "  &6cmd (command)        &r- &6Excecutes a command"
+    exit 1
+  ;;
+esac
+
+exit 0
