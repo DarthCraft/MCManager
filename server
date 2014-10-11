@@ -3,8 +3,8 @@
 # MCManager version 2.0
 # Minecraft bukkit server manager
 #
-# By Jerom van der Sar
-##########################
+# By Jerom van der Sar - Later worked and developed by Ryan Wild
+#################################################################
 
 
 # Load the config
@@ -100,17 +100,11 @@ function mc_restart() {
 
 function mc_update() {
   case "$1" in
-    dev)
-      DOWNLOAD_URL="http://dl.bukkit.org/latest-dev/craftbukkit.jar"
-    ;;
-    beta)
-      DOWNLOAD_URL="http://dl.bukkit.org/latest-beta/craftbukkit.jar"
-    ;;
-    rb)
-      DOWNLOAD_URL="http://dl.bukkit.org/latest-rb/craftbukkit.jar"
+    glowstone)
+      DOWNLOAD_URL="http://ci.chrisgward.com/job/Glowstone/lastSuccessfulBuild/artifact/build/libs/glowstone.jar"
     ;;
     *)
-      warningmsg "Please use either 'dev', 'beta', or 'rb'"
+      warningmsg "Please use 'glowstone'"
       exit
     ;;
   esac
@@ -238,7 +232,7 @@ case "$1" in
       #mc_backup
       mc_update "$2"
     else
-      warningmsg "Must specify branch ('dev', 'beta' or 'rb')"
+      warningmsg "Must specify branch ('glowstone')"
     fi
   ;;
   backup)
@@ -283,7 +277,7 @@ case "$1" in
     cecho "&3Usage: $0"
     cecho "  &6start                &r- &6Starts the server"
     cecho "  &6stop                 &r- &6Stops the server"
-    cecho "  &6update <dev/beta/rb> &r- &6Updates the server to a branch"
+    cecho "  &6update <glowstone>   &r- &6Updates the server to a branch"
     cecho "  &6backup               &r- &6Makes a backup of the world"
     cecho "  &6status               &r- &6Shows server information"
     cecho "  &6restart              &r- &6Restarts the server"
@@ -294,3 +288,4 @@ case "$1" in
 esac
 
 exit 0
+
