@@ -100,11 +100,11 @@ function mc_restart() {
 
 function mc_update() {
   case "$1" in
-    glowstone)
-      DOWNLOAD_URL="http://ci.chrisgward.com/job/Glowstone/lastSuccessfulBuild/artifact/build/libs/glowstone.jar"
+    spigot)
+      DOWNLOAD_URL=$SPIGOTURL
     ;;
     *)
-      warningmsg "Please use 'glowstone'"
+      warningmsg "Please use 'spigot'"
       exit
     ;;
   esac
@@ -112,13 +112,13 @@ function mc_update() {
 
   infomsg "Download url: $DOWNLOAD_URL"
   infomsg "Dowloading Update..."
-  as_user "cd $MCPATH && wget -q -O $MCPATH/craftbukkit.jar.update $DOWNLOAD_URL"
+  as_user "cd $MCPATH && wget -q -O $MCPATH/spigot.jar.update $DOWNLOAD_URL"
   okmsg "Download complete!"
 
-  if [ -f $MCPATH/craftbukkit.jar.update ]
+  if [ -f $MCPATH/spigot.jar.update ]
   then
 
-    if `diff $MCPATH/$SERVICE $MCPATH/craftbukkit.jar.update >/dev/null`
+    if `diff $MCPATH/$SERVICE $MCPATH/spigot.jar.update >/dev/null`
     then
       warningmsg "The latest version of $SERVICE is already installed."
       #rm $MCPATH/craftbukkit.jar.update
@@ -149,7 +149,7 @@ function mc_update() {
     okmsg "Server successfully updated."
 
   else
-    errormsg "CraftBukkit update could not be downloaded."
+    errormsg "Spigot update could not be downloaded."
   fi
 
 }
@@ -277,7 +277,7 @@ case "$1" in
     cecho "&3Usage: $0"
     cecho "  &6start                &r- &6Starts the server"
     cecho "  &6stop                 &r- &6Stops the server"
-    cecho "  &6update <glowstone>   &r- &6Updates the server to a branch"
+    cecho "  &6update <spigot>   &r- &6Updates the server to a branch"
     cecho "  &6backup               &r- &6Makes a backup of the world"
     cecho "  &6status               &r- &6Shows server information"
     cecho "  &6restart              &r- &6Restarts the server"
