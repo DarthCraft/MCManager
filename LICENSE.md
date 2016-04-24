@@ -1,0 +1,1 @@
+This project, MCManager, is licenced under the Superior Development Licence.  You may locate Superior Development Licence here: [LICENCE.md] (https://github.com/Superior-Development/License/blob/master/LICENCE.md)
